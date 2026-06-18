@@ -1,0 +1,1129 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>Driver Grid — WebSocket Test Console</title>
+  <style>
+    :root {
+      --bg: #0f1419;
+      --panel: #1a2332;
+      --border: #2d3a4f;
+      --text: #e7ecf3;
+      --muted: #8b9cb3;
+      --accent: #3b82f6;
+      --green: #22c55e;
+      --red: #ef4444;
+      --yellow: #eab308;
+      --purple: #a855f7;
+    }
+    * { box-sizing: border-box; }
+    body {
+      margin: 0;
+      font-family: system-ui, -apple-system, Segoe UI, Roboto, sans-serif;
+      background: var(--bg);
+      color: var(--text);
+      line-height: 1.45;
+    }
+    header {
+      padding: 1rem 1.25rem;
+      border-bottom: 1px solid var(--border);
+      background: var(--panel);
+      display: flex;
+      flex-wrap: wrap;
+      gap: 0.75rem;
+      align-items: center;
+      justify-content: space-between;
+    }
+    header h1 { margin: 0; font-size: 1.15rem; }
+    .status-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 0.4rem;
+      padding: 0.25rem 0.65rem;
+      border-radius: 999px;
+      font-size: 0.8rem;
+      border: 1px solid var(--border);
+    }
+    .dot { width: 8px; height: 8px; border-radius: 50%; background: var(--muted); }
+    .dot.on { background: var(--green); box-shadow: 0 0 8px var(--green); }
+    .dot.off { background: var(--red); }
+    main {
+      display: grid;
+      grid-template-columns: 340px 1fr;
+      gap: 1rem;
+      padding: 1rem;
+      min-height: calc(100vh - 64px);
+    }
+    @media (max-width: 960px) {
+      main { grid-template-columns: 1fr; }
+    }
+    .sidebar, .content { display: flex; flex-direction: column; gap: 1rem; }
+    section {
+      background: var(--panel);
+      border: 1px solid var(--border);
+      border-radius: 10px;
+      padding: 1rem;
+    }
+    section h2 {
+      margin: 0 0 0.75rem;
+      font-size: 0.95rem;
+      color: var(--muted);
+      text-transform: uppercase;
+      letter-spacing: 0.04em;
+    }
+    label { display: block; font-size: 0.8rem; color: var(--muted); margin-bottom: 0.25rem; }
+    input, select, textarea {
+      width: 100%;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--text);
+      border-radius: 6px;
+      padding: 0.5rem 0.6rem;
+      font-size: 0.9rem;
+    }
+    textarea { min-height: 70px; resize: vertical; font-family: ui-monospace, monospace; font-size: 0.78rem; }
+    .row { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-top: 0.5rem; }
+    .row > * { flex: 1; min-width: 120px; }
+    button {
+      background: var(--accent);
+      color: #fff;
+      border: none;
+      border-radius: 6px;
+      padding: 0.5rem 0.75rem;
+      font-size: 0.85rem;
+      cursor: pointer;
+    }
+    button:hover { filter: brightness(1.08); }
+    button.secondary { background: #334155; }
+    button.danger { background: var(--red); }
+    button.success { background: var(--green); color: #052e16; }
+    button:disabled { opacity: 0.45; cursor: not-allowed; }
+    .hint { font-size: 0.78rem; color: var(--muted); margin-top: 0.5rem; }
+    .counts-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
+      gap: 0.5rem;
+    }
+    .count-card {
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.6rem 0.75rem;
+    }
+    .count-card strong { display: block; font-size: 1.4rem; color: var(--green); }
+    .count-card span { font-size: 0.75rem; color: var(--muted); }
+    .log {
+      background: #0a0e14;
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      height: 420px;
+      overflow: auto;
+      font-family: ui-monospace, SFMono-Regular, Menlo, monospace;
+      font-size: 0.75rem;
+      padding: 0.5rem;
+    }
+    .log-entry { padding: 0.2rem 0; border-bottom: 1px solid #1e293b; white-space: pre-wrap; word-break: break-word; }
+    .log-entry .ts { color: var(--muted); }
+    .log-entry.ws-in { color: #7dd3fc; }
+    .log-entry.ws-out { color: #fde68a; }
+    .log-entry.rest { color: #86efac; }
+    .log-entry.err { color: #fca5a5; }
+    .log-entry.sys { color: var(--muted); }
+    .chat-msgs {
+      max-height: 200px;
+      overflow: auto;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      border-radius: 8px;
+      padding: 0.5rem;
+      margin-bottom: 0.5rem;
+    }
+    .chat-msg {
+      padding: 0.35rem 0;
+      border-bottom: 1px solid #1e293b;
+      font-size: 0.85rem;
+      cursor: pointer;
+    }
+    .chat-msg:hover { background: rgba(255,255,255,0.03); }
+    .chat-msg .meta { color: var(--muted); font-size: 0.75rem; }
+    .chat-msg .reply-preview {
+      font-size: 0.75rem;
+      color: var(--muted);
+      border-left: 2px solid var(--accent);
+      padding-left: 0.5rem;
+      margin-bottom: 0.25rem;
+    }
+    .reply-bar {
+      display: none;
+      font-size: 0.85rem;
+      padding: 0.35rem 0.5rem;
+      margin-bottom: 0.35rem;
+      background: rgba(99,102,241,0.15);
+      border-radius: 4px;
+    }
+    .reply-bar.visible { display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; }
+    .alert-row {
+      padding: 0.5rem;
+      border-bottom: 1px solid #1e293b;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 0.85rem;
+    }
+    .alert-row:hover { background: #111827; }
+    .alert-row.selected { outline: 1px solid var(--accent); background: #172033; }
+    .alert-row.flash-new { animation: flashGreen 1.2s ease; }
+    .alert-row.flash-updated { animation: flashYellow 1.2s ease; }
+    .alert-row.flash-deleted { animation: flashRed 1.2s ease; opacity: 0.5; }
+    .alert-actions { display: flex; gap: 0.35rem; flex-wrap: wrap; margin-top: 0.35rem; }
+    .alert-actions button { flex: 0 0 auto; min-width: auto; padding: 0.25rem 0.5rem; font-size: 0.72rem; }
+    .alert-banner {
+      display: none;
+      margin-bottom: 0.5rem;
+      padding: 0.6rem 0.75rem;
+      border-radius: 8px;
+      background: #1e3a5f;
+      border: 1px solid #3b82f6;
+      font-size: 0.85rem;
+    }
+    .alert-banner.show { display: block; }
+    .alert-banner strong { display: block; margin-bottom: 0.15rem; }
+    .ws-stats { display: flex; gap: 0.5rem; flex-wrap: wrap; margin-bottom: 0.5rem; }
+    .ws-stat {
+      font-size: 0.72rem;
+      padding: 0.2rem 0.45rem;
+      border-radius: 4px;
+      background: var(--bg);
+      border: 1px solid var(--border);
+      color: var(--muted);
+    }
+    .ws-stat b { color: var(--text); }
+    @keyframes flashGreen { 0%,100% { background: transparent; } 30% { background: #14532d; } }
+    @keyframes flashYellow { 0%,100% { background: transparent; } 30% { background: #713f12; } }
+    @keyframes flashRed { 0%,100% { background: transparent; } 30% { background: #7f1d1d; } }
+    .log-entry.ws-price { color: #c4b5fd; }
+    .subs { display: flex; flex-wrap: wrap; gap: 0.35rem; margin-top: 0.5rem; }
+    .tag {
+      font-size: 0.72rem;
+      padding: 0.15rem 0.45rem;
+      border-radius: 4px;
+      background: #1e3a5f;
+      color: #93c5fd;
+    }
+    .user-info { font-size: 0.82rem; color: var(--muted); word-break: break-all; }
+  </style>
+</head>
+<body>
+  <header>
+    <div>
+      <h1>Driver Grid — WebSocket Test Console</h1>
+      <div class="hint">Test alongside your logged-in mobile app</div>
+    </div>
+    <div class="status-pill">
+      <span class="dot off" id="wsDot"></span>
+      <span id="wsStatus">Disconnected</span>
+    </div>
+  </header>
+
+  <main>
+    <div class="sidebar">
+      <section>
+        <h2>1. Login</h2>
+        <label>API Base URL</label>
+        <input id="apiBase" value="" />
+        <div class="hint">Auto-detected from page URL. Use same server as mobile.</div>
+
+        <label style="margin-top:0.75rem">Option A — Paste JWT (from mobile debug / storage)</label>
+        <textarea id="tokenInput" placeholder="eyJhbGciOiJIUzI1NiIs..."></textarea>
+        <div class="row">
+          <button class="success" onclick="useToken()">Use Token</button>
+          <button class="secondary" onclick="verifyToken()">Verify</button>
+        </div>
+
+        <label style="margin-top:0.75rem">Option B — Dev login (same user_id as mobile)</label>
+        <input id="userId" placeholder="user_id e.g. 103343709493359555007" />
+        <input id="email" placeholder="email" style="margin-top:0.4rem" />
+        <input id="displayName" placeholder="display_name (optional)" style="margin-top:0.4rem" />
+        <div class="row">
+          <button onclick="devLogin()">Login via API</button>
+        </div>
+        <div class="user-info" id="userInfo" style="margin-top:0.5rem">Not logged in</div>
+      </section>
+
+      <section>
+        <h2>2. WebSocket</h2>
+        <label>WS URL</label>
+        <input id="wsUrl" placeholder="ws://69.197.174.68:10039/ws" />
+        <div class="hint">Connect first — page sends <code>{"type":"auth","token":"..."}</code> automatically. Wait for <strong>Authenticated</strong> before Subscribe.</div>
+        <div class="row">
+          <button class="success" id="btnConnect" onclick="connectWs()">Connect</button>
+          <button class="danger" id="btnDisconnect" onclick="disconnectWs()" disabled>Disconnect</button>
+          <button class="secondary" id="btnAuth" onclick="sendAuth()" disabled>Send Auth</button>
+          <button class="secondary" onclick="sendPing()">Ping</button>
+          <button class="secondary" onclick="fetchWsConfig()">Load URL</button>
+        </div>
+        <div class="subs" id="subsList"></div>
+      </section>
+
+      <section>
+        <h2>3. Subscribe</h2>
+        <label>Chat group</label>
+        <select id="chatGroup">
+          <option value="ohare">ohare</option>
+          <option value="midway">midway</option>
+          <option value="ord-limo-lot">ord-limo-lot</option>
+        </select>
+        <div class="row">
+          <button onclick="subscribeChat()">Subscribe Chat</button>
+          <button class="secondary" onclick="unsubscribeChat()">Unsub Chat</button>
+        </div>
+        <div class="row">
+          <button onclick="subscribePresence()">Subscribe Presence</button>
+          <button onclick="subscribeNotifications()">Subscribe Notifications</button>
+          <button onclick="subscribePriceAlerts()">Subscribe Price Alerts</button>
+          <button class="secondary" onclick="unsubscribePriceAlerts()">Unsub Price Alerts</button>
+        </div>
+        <div class="row">
+          <button class="secondary" onclick="subscribeAll()">Subscribe All</button>
+        </div>
+      </section>
+    </div>
+
+    <div class="content">
+      <section>
+        <h2>Price alerts</h2>
+        <div class="ws-stats">
+          <span class="ws-stat">WS new: <b id="statAlertNew">0</b></span>
+          <span class="ws-stat">WS updated: <b id="statAlertUpdated">0</b></span>
+          <span class="ws-stat">WS deleted: <b id="statAlertDeleted">0</b></span>
+          <span class="ws-stat">Notifications: <b id="statAlertNotif">0</b></span>
+        </div>
+        <div class="alert-banner" id="alertBanner">
+          <strong id="alertBannerTitle"></strong>
+          <span id="alertBannerBody"></span>
+        </div>
+        <div class="chat-msgs" id="priceAlertsList"><div class="hint">Load or wait for WS events — click a row to select</div></div>
+
+        <label>Selected alert ID</label>
+        <input id="selectedAlertId" placeholder="Click a row or enter ID" />
+
+        <label style="margin-top:0.5rem">Create / Update</label>
+        <input id="alertPickup" placeholder="Pickup e.g. ORD" />
+        <input id="alertDropoff" placeholder="Dropoff e.g. Downtown" style="margin-top:0.4rem" />
+        <input id="alertPrice" placeholder="Price e.g. 25" type="number" step="0.01" style="margin-top:0.4rem" />
+
+        <div class="row">
+          <button onclick="loadPriceAlerts()">Load (REST)</button>
+          <button class="success" onclick="createPriceAlert()">Create (REST)</button>
+          <button onclick="updatePriceAlert()">Update (REST)</button>
+        </div>
+        <div class="row">
+          <button class="success" onclick="likePriceAlert()">Like</button>
+          <button class="danger" onclick="dislikePriceAlert()">Dislike</button>
+          <button class="secondary" onclick="removePriceAlertReaction()">Remove reaction</button>
+          <button class="danger" onclick="deletePriceAlert()">Delete</button>
+        </div>
+        <div class="hint">
+          Subscribe <code>price_alerts</code> + <code>notifications</code>. Others receive
+          <code>price_alert.new</code> + <code>notification</code> (type <code>ride_alert</code>) + FCM push.
+          Updates/likes send <code>price_alert.updated</code>; delete sends <code>price_alert.deleted</code>.
+        </div>
+      </section>
+
+      <section>
+        <h2>Presence (active users)</h2>
+        <div class="counts-grid" id="countsGrid"></div>
+        <label style="margin-top:0.75rem">Parking lot</label>
+        <select id="parkingLot">
+          <option value="MidwayLot">MidwayLot</option>
+          <option value="OhareAlphaLot">OhareAlphaLot</option>
+          <option value="OhareDeltaLot">OhareDeltaLot</option>
+        </select>
+        <div class="row">
+          <button class="success" onclick="incrementPresence()">Increment (enter lot)</button>
+          <button class="danger" onclick="decrementPresence()">Decrement (leave lot)</button>
+          <button class="secondary" onclick="fetchCounts()">Refresh counts (REST)</button>
+        </div>
+        <div class="hint">Mobile should receive <code>presence.counts</code> when you increment/decrement here (and vice versa).</div>
+      </section>
+
+      <section>
+        <h2>Chat</h2>
+        <div class="chat-msgs" id="chatMsgs"><div class="hint">Load history or wait for WS events — click a message to reply</div></div>
+        <div class="reply-bar" id="replyBar">
+          <span id="replyBarText">Replying to #…</span>
+          <button type="button" class="secondary" onclick="clearReplyTarget()">Cancel</button>
+        </div>
+        <input id="chatText" placeholder="Message text..." />
+        <input id="replyToId" type="hidden" />
+        <div class="row">
+          <button onclick="loadChat()">Load history</button>
+          <button onclick="sendChat()">Send (REST)</button>
+        </div>
+        <div class="hint">Sending via REST triggers <code>chat.message.new</code> on subscribed clients (including mobile).</div>
+      </section>
+
+      <section>
+        <h2>Event log</h2>
+        <div class="row">
+          <button class="secondary" onclick="clearLog()">Clear</button>
+          <label style="display:flex;align-items:center;gap:0.35rem;margin:0">
+            <input type="checkbox" id="autoScroll" checked style="width:auto" /> Auto-scroll
+          </label>
+        </div>
+        <div class="log" id="log"></div>
+      </section>
+    </div>
+  </main>
+
+  <script>
+    const STORAGE_KEY = 'drivergrid_ws_test_token';
+    let ws = null;
+    let token = localStorage.getItem(STORAGE_KEY) || '';
+    let pingTimer = null;
+    let wsAuthenticated = false;
+    const subscriptions = new Set();
+    const alertStats = { new: 0, updated: 0, deleted: 0, notif: 0 };
+    const alertCache = {};
+
+    const DEFAULT_API_BASE = 'http://69.197.174.68:10039/api';
+    const DEFAULT_WS_URL = 'ws://69.197.174.68:10039/ws';
+
+    function detectApiBase() {
+      const loc = window.location;
+      if (loc.protocol === 'file:') return DEFAULT_API_BASE;
+      const path = loc.pathname.replace(/\/websocket\/test\.html$/, '');
+      const base = `${loc.protocol}//${loc.host}${path}`;
+      return base.endsWith('/api') ? base : DEFAULT_API_BASE;
+    }
+
+    function wsUrlFromApiBase(apiBase) {
+      try {
+        const u = new URL(apiBase);
+        u.protocol = u.protocol === 'https:' ? 'wss:' : 'ws:';
+        u.pathname = u.pathname.replace(/\/api\/?$/, '') + '/ws';
+        return u.toString().replace(/\/$/, '');
+      } catch (_) {
+        return DEFAULT_WS_URL;
+      }
+    }
+
+    function ensureWsUrl() {
+      const el = document.getElementById('wsUrl');
+      if (!el.value.trim()) {
+        el.value = wsUrlFromApiBase(document.getElementById('apiBase').value.trim() || DEFAULT_API_BASE);
+      }
+    }
+
+    function apiUrl(path) {
+      return document.getElementById('apiBase').value.replace(/\/$/, '') + path;
+    }
+
+    function log(msg, cls = 'sys') {
+      const el = document.getElementById('log');
+      const ts = new Date().toLocaleTimeString();
+      const div = document.createElement('div');
+      div.className = `log-entry ${cls}`;
+      div.innerHTML = `<span class="ts">[${ts}]</span> ${escapeHtml(msg)}`;
+      el.appendChild(div);
+      if (document.getElementById('autoScroll').checked) {
+        el.scrollTop = el.scrollHeight;
+      }
+    }
+
+    function escapeHtml(s) {
+      return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;');
+    }
+
+    function clearLog() {
+      document.getElementById('log').innerHTML = '';
+    }
+
+    function setWsStatus(connected, text) {
+      document.getElementById('wsDot').className = 'dot ' + (connected && wsAuthenticated ? 'on' : connected ? 'on' : 'off');
+      document.getElementById('wsStatus').textContent = text;
+      document.getElementById('btnConnect').disabled = connected;
+      document.getElementById('btnDisconnect').disabled = !connected;
+      document.getElementById('btnAuth').disabled = !connected;
+    }
+
+    function sendAuth() {
+      if (!token) {
+        log('Login first — no JWT token', 'err');
+        return;
+      }
+      wsAuthenticated = false;
+      wsSend({ type: 'auth', token });
+      log('Sent auth message — wait for authenticated response', 'sys');
+    }
+
+    function updateSubs() {
+      const el = document.getElementById('subsList');
+      el.innerHTML = [...subscriptions].map(s => `<span class="tag">${escapeHtml(s)}</span>`).join('') || '<span class="hint">No subscriptions</span>';
+    }
+
+    function setUserInfo(text) {
+      document.getElementById('userInfo').textContent = text;
+    }
+
+    async function fetchWsConfig() {
+      try {
+        const headers = token ? { Authorization: `Bearer ${token}` } : {};
+        const res = await fetch(apiUrl('/ws'), { headers });
+        const json = await res.json();
+        if (json.success && json.data?.url) {
+          document.getElementById('wsUrl').value = json.data.url;
+          log('WS config loaded: ' + json.data.url, 'rest');
+          if (json.data.fcm_configured === false) {
+            log('⚠ FCM NOT configured on server — push notifications will NOT work. Add Firebase credentials to .env', 'err');
+          } else if (json.data.fcm_configured === true) {
+            log('FCM configured on server — push notifications enabled', 'sys');
+          }
+          if (json.data.user_id) {
+            setUserInfo(`Logged in as ${json.data.user_id}`);
+          }
+          return;
+        }
+        log('WS config response had no url — using default', 'err');
+      } catch (e) {
+        log('Failed to load WS config: ' + e.message + ' — using default URL', 'err');
+      }
+      ensureWsUrl();
+      log('WS URL set to: ' + document.getElementById('wsUrl').value, 'sys');
+    }
+
+    function useToken() {
+      token = document.getElementById('tokenInput').value.trim();
+      if (!token) { log('Paste a JWT first', 'err'); return; }
+      localStorage.setItem(STORAGE_KEY, token);
+      log('Token saved to localStorage', 'sys');
+      fetchWsConfig();
+      decodeAndShowUser();
+    }
+
+    function decodeAndShowUser() {
+      try {
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        setUserInfo(`user_id: ${payload.user_id}\nemail: ${payload.email || '—'}`);
+      } catch (_) {
+        setUserInfo('Token set (could not decode payload)');
+      }
+    }
+
+    async function verifyToken() {
+      if (!token) useToken();
+      if (!token) return;
+      try {
+        const res = await fetch(apiUrl('/auth/verify'), {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${token}` }
+        });
+        const json = await res.json();
+        log('Verify: ' + JSON.stringify(json), json.success ? 'rest' : 'err');
+      } catch (e) {
+        log('Verify failed: ' + e.message, 'err');
+      }
+    }
+
+    async function devLogin() {
+      const user_id = document.getElementById('userId').value.trim();
+      const email = document.getElementById('email').value.trim();
+      const display_name = document.getElementById('displayName').value.trim();
+      if (!user_id || !email) {
+        log('user_id and email required for dev login', 'err');
+        return;
+      }
+      try {
+        const res = await fetch(apiUrl('/auth/google'), {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            id_token: 'test-console-token',
+            user_id,
+            email,
+            display_name: display_name || 'Test User'
+          })
+        });
+        const json = await res.json();
+        log('Login: ' + JSON.stringify(json), json.success ? 'rest' : 'err');
+        if (json.success && json.data?.token) {
+          token = json.data.token;
+          document.getElementById('tokenInput').value = token;
+          localStorage.setItem(STORAGE_KEY, token);
+          setUserInfo(`Logged in as ${user_id} (${email})`);
+          fetchWsConfig();
+        }
+      } catch (e) {
+        log('Login failed: ' + e.message, 'err');
+      }
+    }
+
+    function wsSend(obj) {
+      if (!ws || ws.readyState !== WebSocket.OPEN) {
+        log('WebSocket not connected', 'err');
+        return false;
+      }
+      const raw = JSON.stringify(obj);
+      ws.send(raw);
+      log('→ ' + raw, 'ws-out');
+      return true;
+    }
+
+    function requireAuth(action) {
+      if (!ws || ws.readyState !== WebSocket.OPEN) {
+        log('Connect WebSocket first', 'err');
+        return false;
+      }
+      if (!wsAuthenticated) {
+        log('Not authenticated yet — click Connect or Send Auth, wait for authenticated', 'err');
+        sendAuth();
+        return false;
+      }
+      return true;
+    }
+
+    function startPing() {
+      stopPing();
+      pingTimer = setInterval(() => wsSend({ type: 'ping' }), 25000);
+    }
+
+    function stopPing() {
+      if (pingTimer) { clearInterval(pingTimer); pingTimer = null; }
+    }
+
+    function connectWs() {
+      if (!token) {
+        log('Login or paste JWT first', 'err');
+        return;
+      }
+      disconnectWs();
+      wsAuthenticated = false;
+
+      ensureWsUrl();
+      let url = document.getElementById('wsUrl').value.trim();
+      if (!url) {
+        url = DEFAULT_WS_URL;
+        document.getElementById('wsUrl').value = url;
+      }
+      // Strip query string — auth via JSON message (proxy often drops ?token=)
+      url = url.split('?')[0];
+
+      log('Connecting to ' + url, 'sys');
+      ws = new WebSocket(url);
+
+      ws.onopen = () => {
+        setWsStatus(true, 'Connected — authenticating...');
+        log('WebSocket open — sending auth...', 'sys');
+        startPing();
+        sendAuth();
+      };
+
+      ws.onmessage = (ev) => {
+        log('← ' + ev.data, 'ws-in');
+        let msg;
+        try { msg = JSON.parse(ev.data); } catch (_) { return; }
+
+        if (msg.type === 'connected') {
+          if (!wsAuthenticated) sendAuth();
+        }
+        if (msg.type === 'authenticated') {
+          wsAuthenticated = true;
+          setWsStatus(true, `Authenticated (${msg.user_id})`);
+          log('Ready to subscribe', 'sys');
+        }
+        if (msg.type === 'subscribed') {
+          const key = msg.channel === 'chat' ? `chat:${msg.group}` : msg.channel;
+          subscriptions.add(key);
+          updateSubs();
+        }
+        if (msg.type === 'unsubscribed') {
+          const key = msg.channel === 'chat' ? `chat:${msg.group}` : msg.channel;
+          subscriptions.delete(key);
+          updateSubs();
+        }
+        if (msg.type === 'presence.counts') {
+          renderCounts(msg.payload?.counts || {});
+        }
+        if (msg.type === 'chat.message.new') {
+          appendChatFromWs(msg.payload);
+        }
+        if (msg.type === 'chat.message.deleted') {
+          const id = msg.payload?.message_id;
+          log(`Chat message deleted: ${id}`, 'ws-in');
+        }
+        if (msg.type === 'notification') {
+          const p = msg.payload || {};
+          const data = p.data || {};
+          if (p.type === 'ride_alert' || p.type === 'price_alert' || data.type === 'ride_alert') {
+            alertStats.notif++;
+            updateAlertStats();
+            showAlertNotification(p);
+            log('RIDE ALERT NOTIFICATION: ' + JSON.stringify(p), 'ws-price');
+          } else {
+            log('NOTIFICATION: ' + JSON.stringify(p), 'ws-in');
+          }
+        }
+        if (msg.type === 'price_alert.new') {
+          alertStats.new++;
+          updateAlertStats();
+          prependPriceAlert(msg.payload?.price_alert, 'flash-new');
+          log('price_alert.new #' + (msg.payload?.price_alert?.id || '?'), 'ws-price');
+        }
+        if (msg.type === 'price_alert.updated') {
+          alertStats.updated++;
+          updateAlertStats();
+          prependPriceAlert(msg.payload?.price_alert, 'flash-updated');
+          log('price_alert.updated #' + (msg.payload?.price_alert?.id || '?'), 'ws-price');
+        }
+        if (msg.type === 'price_alert.deleted') {
+          alertStats.deleted++;
+          updateAlertStats();
+          flashDeletePriceAlert(msg.payload?.alert_id);
+          log('price_alert.deleted #' + (msg.payload?.alert_id || '?'), 'ws-price');
+        }
+        if (msg.type === 'error') {
+          if ((msg.message || '').toLowerCase().includes('token')) {
+            wsAuthenticated = false;
+            setWsStatus(true, 'Connected — auth failed');
+          }
+          log('WS error: ' + (msg.message || ev.data), 'err');
+        }
+      };
+
+      ws.onerror = () => log('WebSocket error', 'err');
+      ws.onclose = () => {
+        wsAuthenticated = false;
+        setWsStatus(false, 'Disconnected');
+        stopPing();
+        subscriptions.clear();
+        updateSubs();
+        log('WebSocket closed', 'sys');
+      };
+    }
+
+    function disconnectWs() {
+      stopPing();
+      wsAuthenticated = false;
+      if (ws) {
+        ws.close();
+        ws = null;
+      }
+      setWsStatus(false, 'Disconnected');
+    }
+
+    function sendPing() {
+      wsSend({ type: 'ping' });
+    }
+
+    function subscribeChat() {
+      if (!requireAuth('subscribe')) return;
+      const group = document.getElementById('chatGroup').value;
+      wsSend({ type: 'subscribe', channel: 'chat', group });
+    }
+
+    function unsubscribeChat() {
+      if (!ws || ws.readyState !== WebSocket.OPEN) return;
+      const group = document.getElementById('chatGroup').value;
+      wsSend({ type: 'unsubscribe', channel: 'chat', group });
+    }
+
+    function subscribePresence() {
+      if (!requireAuth('subscribe')) return;
+      wsSend({ type: 'subscribe', channel: 'presence' });
+    }
+
+    function subscribeNotifications() {
+      if (!requireAuth('subscribe')) return;
+      wsSend({ type: 'subscribe', channel: 'notifications' });
+    }
+
+    function subscribePriceAlerts() {
+      if (!requireAuth('subscribe')) return;
+      wsSend({ type: 'subscribe', channel: 'price_alerts' });
+    }
+
+    function unsubscribePriceAlerts() {
+      if (!ws || ws.readyState !== WebSocket.OPEN) return;
+      wsSend({ type: 'unsubscribe', channel: 'price_alerts' });
+    }
+
+    function subscribeAll() {
+      if (!requireAuth('subscribe')) return;
+      subscribePresence();
+      subscribeNotifications();
+      subscribePriceAlerts();
+      subscribeChat();
+    }
+
+    function authHeaders() {
+      return {
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${token}`
+      };
+    }
+
+    async function fetchCounts() {
+      if (!token) { log('Login first', 'err'); return; }
+      try {
+        const res = await fetch(apiUrl('/active-users'), { headers: authHeaders() });
+        const json = await res.json();
+        log('GET active-users: ' + JSON.stringify(json), 'rest');
+        if (json.success) renderCounts(json.data);
+      } catch (e) {
+        log('fetchCounts: ' + e.message, 'err');
+      }
+    }
+
+    function renderCounts(counts) {
+      const grid = document.getElementById('countsGrid');
+      const entries = Object.entries(counts);
+      if (!entries.length) {
+        grid.innerHTML = '<div class="hint">No counts</div>';
+        return;
+      }
+      grid.innerHTML = entries.map(([name, n]) =>
+        `<div class="count-card"><strong>${n}</strong><span>${escapeHtml(name)}</span></div>`
+      ).join('');
+    }
+
+    async function incrementPresence() {
+      if (!token) { log('Login first', 'err'); return; }
+      const parking_lot = document.getElementById('parkingLot').value;
+      try {
+        const res = await fetch(apiUrl('/active-users/increment'), {
+          method: 'POST',
+          headers: authHeaders(),
+          body: JSON.stringify({ parking_lot, location_name: parking_lot })
+        });
+        const json = await res.json();
+        log('Increment: ' + JSON.stringify(json), 'rest');
+        fetchCounts();
+      } catch (e) {
+        log('increment: ' + e.message, 'err');
+      }
+    }
+
+    async function decrementPresence() {
+      if (!token) { log('Login first', 'err'); return; }
+      const parking_lot = document.getElementById('parkingLot').value;
+      try {
+        const res = await fetch(apiUrl('/active-users/decrement'), {
+          method: 'POST',
+          headers: authHeaders(),
+          body: JSON.stringify({ parking_lot, location_name: parking_lot })
+        });
+        const json = await res.json();
+        log('Decrement: ' + JSON.stringify(json), 'rest');
+        fetchCounts();
+      } catch (e) {
+        log('decrement: ' + e.message, 'err');
+      }
+    }
+
+    async function loadChat() {
+      const group = document.getElementById('chatGroup').value;
+      try {
+        const res = await fetch(apiUrl(`/chat/${group}?limit=30`));
+        const json = await res.json();
+        log('Chat history: ' + (json.data?.messages?.length || 0) + ' messages', 'rest');
+        const el = document.getElementById('chatMsgs');
+        const msgs = json.data?.messages || [];
+        el.innerHTML = msgs.length ? msgs.map(m => formatChatLine(m)).join('') : '<div class="hint">No messages</div>';
+      } catch (e) {
+        log('loadChat: ' + e.message, 'err');
+      }
+    }
+
+    function formatChatLine(m) {
+      const name = m.display_name || m.user_id || '?';
+      const text = escapeHtml(m.text || '');
+      const id = m.id || m.message_id || '';
+      const reply = m.reply_to;
+      const replyHtml = reply
+        ? `<div class="reply-preview">↩ ${escapeHtml(reply.display_name || reply.user_id || '?')}: ${escapeHtml((reply.text || '').slice(0, 80))}</div>`
+        : '';
+      return `<div class="chat-msg" data-msg-id="${id}" onclick="setReplyTarget(${id}, '${escapeHtml(name).replace(/'/g, "\\'")}', '${escapeHtml((m.text || '').slice(0, 60)).replace(/'/g, "\\'")}')">${replyHtml}<div class="meta">#${id} ${escapeHtml(name)} · ${m.created_at || ''}</div>${text}</div>`;
+    }
+
+    function setReplyTarget(id, name, preview) {
+      document.getElementById('replyToId').value = String(id);
+      document.getElementById('replyBarText').textContent = `Replying to #${id} ${name}: ${preview}`;
+      document.getElementById('replyBar').classList.add('visible');
+      document.getElementById('chatText').focus();
+    }
+
+    function clearReplyTarget() {
+      document.getElementById('replyToId').value = '';
+      document.getElementById('replyBar').classList.remove('visible');
+    }
+
+    function appendChatFromWs(payload) {
+      const group = document.getElementById('chatGroup').value;
+      if (payload?.group && payload.group !== group) return;
+      const el = document.getElementById('chatMsgs');
+      if (el.querySelector('.hint')) el.innerHTML = '';
+      const m = payload?.message || payload;
+      el.insertAdjacentHTML('afterbegin', formatChatLine(m));
+    }
+
+    async function sendChat() {
+      if (!token) { log('Login first', 'err'); return; }
+      const group = document.getElementById('chatGroup').value;
+      const text = document.getElementById('chatText').value.trim();
+      if (!text) return;
+      const body = { text };
+      const replyId = parseInt(document.getElementById('replyToId').value, 10);
+      if (replyId > 0) body.reply_to_message_id = replyId;
+      try {
+        const res = await fetch(apiUrl(`/chat/${group}`), {
+          method: 'POST',
+          headers: authHeaders(),
+          body: JSON.stringify(body)
+        });
+        const json = await res.json();
+        log('Send chat: ' + JSON.stringify(json), 'rest');
+        document.getElementById('chatText').value = '';
+        clearReplyTarget();
+        loadChat();
+      } catch (e) {
+        log('sendChat: ' + e.message, 'err');
+      }
+    }
+
+    function updateAlertStats() {
+      document.getElementById('statAlertNew').textContent = alertStats.new;
+      document.getElementById('statAlertUpdated').textContent = alertStats.updated;
+      document.getElementById('statAlertDeleted').textContent = alertStats.deleted;
+      document.getElementById('statAlertNotif').textContent = alertStats.notif;
+    }
+
+    function showAlertNotification(p) {
+      const banner = document.getElementById('alertBanner');
+      document.getElementById('alertBannerTitle').textContent = p.title || 'New price alert';
+      document.getElementById('alertBannerBody').textContent = p.body || '';
+      banner.classList.add('show');
+      setTimeout(() => banner.classList.remove('show'), 8000);
+    }
+
+    function selectPriceAlert(id) {
+      document.getElementById('selectedAlertId').value = id;
+      document.querySelectorAll('.alert-row').forEach((el) => {
+        el.classList.toggle('selected', el.dataset.alertId === String(id));
+      });
+      const alert = alertCache[id];
+      if (alert) {
+        document.getElementById('alertPickup').value = alert.pickup || '';
+        document.getElementById('alertDropoff').value = alert.dropoff || '';
+        document.getElementById('alertPrice').value = parseFloat(alert.price) || '';
+      }
+    }
+
+    function getSelectedAlertId() {
+      return document.getElementById('selectedAlertId').value.trim();
+    }
+
+    function cacheAlert(a) {
+      if (a && a.id != null) alertCache[a.id] = a;
+    }
+
+    function formatPriceAlertLine(a) {
+      if (!a) return '';
+      cacheAlert(a);
+      const likes = a.likes_count ?? 0;
+      const dislikes = a.dislikes_count ?? 0;
+      return `<div class="alert-row" data-alert-id="${a.id}" onclick="selectPriceAlert(${a.id})">
+        <div class="meta">#${a.id} ${escapeHtml(a.display_name || a.user_id || '?')} · $${escapeHtml(String(a.price))} · 👍 ${likes} 👎 ${dislikes}</div>
+        ${escapeHtml(a.pickup)} → ${escapeHtml(a.dropoff)}
+        <div class="meta">${a.created_at || ''}</div>
+      </div>`;
+    }
+
+    function prependPriceAlert(alert, flashClass) {
+      if (!alert) return;
+      cacheAlert(alert);
+      const el = document.getElementById('priceAlertsList');
+      if (el.querySelector('.hint')) el.innerHTML = '';
+      const existing = el.querySelector(`[data-alert-id="${alert.id}"]`);
+      if (existing) existing.remove();
+      el.insertAdjacentHTML('afterbegin', formatPriceAlertLine(alert));
+      const row = el.querySelector(`[data-alert-id="${alert.id}"]`);
+      if (row && flashClass) {
+        row.classList.add(flashClass);
+        setTimeout(() => row.classList.remove(flashClass), 1200);
+      }
+    }
+
+    function flashDeletePriceAlert(alertId) {
+      const el = document.getElementById('priceAlertsList');
+      const row = el.querySelector(`[data-alert-id="${alertId}"]`);
+      if (row) {
+        row.classList.add('flash-deleted');
+        setTimeout(() => row.remove(), 1200);
+      }
+      if (getSelectedAlertId() === String(alertId)) {
+        document.getElementById('selectedAlertId').value = '';
+      }
+    }
+
+    function removePriceAlert(alertId) {
+      flashDeletePriceAlert(alertId);
+    }
+
+    async function loadPriceAlerts() {
+      try {
+        const res = await fetch(apiUrl('/price-alerts?limit=30'));
+        const json = await res.json();
+        const alerts = json.data?.price_alerts || [];
+        log('Price alerts loaded: ' + alerts.length, 'rest');
+        const el = document.getElementById('priceAlertsList');
+        el.innerHTML = alerts.length
+          ? alerts.map(formatPriceAlertLine).join('')
+          : '<div class="hint">No price alerts</div>';
+      } catch (e) {
+        log('loadPriceAlerts: ' + e.message, 'err');
+      }
+    }
+
+    async function createPriceAlert() {
+      if (!token) { log('Login first', 'err'); return; }
+      const pickup = document.getElementById('alertPickup').value.trim();
+      const dropoff = document.getElementById('alertDropoff').value.trim();
+      const price = document.getElementById('alertPrice').value.trim();
+      if (!pickup || !dropoff || !price) {
+        log('pickup, dropoff, price required', 'err');
+        return;
+      }
+      try {
+        const res = await fetch(apiUrl('/price-alerts'), {
+          method: 'POST',
+          headers: authHeaders(),
+          body: JSON.stringify({ pickup, dropoff, price: parseFloat(price) })
+        });
+        const json = await res.json();
+        log('Create alert: ' + JSON.stringify(json), json.success ? 'rest' : 'err');
+        if (json.success) {
+          const a = json.data?.price_alert;
+          if (a) { cacheAlert(a); selectPriceAlert(a.id); }
+          loadPriceAlerts();
+        }
+      } catch (e) {
+        log('createPriceAlert: ' + e.message, 'err');
+      }
+    }
+
+    async function updatePriceAlert() {
+      if (!token) { log('Login first', 'err'); return; }
+      const id = getSelectedAlertId();
+      if (!id) { log('Select an alert first', 'err'); return; }
+      const pickup = document.getElementById('alertPickup').value.trim();
+      const dropoff = document.getElementById('alertDropoff').value.trim();
+      const price = document.getElementById('alertPrice').value.trim();
+      if (!pickup || !dropoff || !price) {
+        log('pickup, dropoff, price required', 'err');
+        return;
+      }
+      try {
+        const res = await fetch(apiUrl(`/price-alerts/${id}`), {
+          method: 'PUT',
+          headers: authHeaders(),
+          body: JSON.stringify({ pickup, dropoff, price: parseFloat(price) })
+        });
+        const json = await res.json();
+        log('Update alert: ' + JSON.stringify(json), json.success ? 'rest' : 'err');
+        if (json.success) loadPriceAlerts();
+      } catch (e) {
+        log('updatePriceAlert: ' + e.message, 'err');
+      }
+    }
+
+    async function deletePriceAlert() {
+      if (!token) { log('Login first', 'err'); return; }
+      const id = getSelectedAlertId();
+      if (!id) { log('Select an alert first', 'err'); return; }
+      if (!confirm('Delete price alert #' + id + '?')) return;
+      try {
+        const res = await fetch(apiUrl(`/price-alerts/${id}`), {
+          method: 'DELETE',
+          headers: authHeaders()
+        });
+        const json = await res.json();
+        log('Delete alert: ' + JSON.stringify(json), json.success ? 'rest' : 'err');
+        if (json.success) removePriceAlert(id);
+      } catch (e) {
+        log('deletePriceAlert: ' + e.message, 'err');
+      }
+    }
+
+    async function likePriceAlert() {
+      await reactPriceAlert('like');
+    }
+
+    async function dislikePriceAlert() {
+      await reactPriceAlert('dislike');
+    }
+
+    async function reactPriceAlert(type) {
+      if (!token) { log('Login first', 'err'); return; }
+      const id = getSelectedAlertId();
+      if (!id) { log('Select an alert first', 'err'); return; }
+      try {
+        const res = await fetch(apiUrl(`/price-alerts/${id}/${type}`), {
+          method: 'POST',
+          headers: authHeaders()
+        });
+        const json = await res.json();
+        log(`${type} alert: ` + JSON.stringify(json), json.success ? 'rest' : 'err');
+        if (json.success) {
+          const a = json.data?.price_alert;
+          if (a) prependPriceAlert(a, 'flash-updated');
+        }
+      } catch (e) {
+        log('reactPriceAlert: ' + e.message, 'err');
+      }
+    }
+
+    async function removePriceAlertReaction() {
+      if (!token) { log('Login first', 'err'); return; }
+      const id = getSelectedAlertId();
+      if (!id) { log('Select an alert first', 'err'); return; }
+      try {
+        const res = await fetch(apiUrl(`/price-alerts/${id}/reaction`), {
+          method: 'DELETE',
+          headers: authHeaders()
+        });
+        const json = await res.json();
+        log('Remove reaction: ' + JSON.stringify(json), json.success ? 'rest' : 'err');
+        if (json.success) {
+          const a = json.data?.price_alert;
+          if (a) prependPriceAlert(a, 'flash-updated');
+        }
+      } catch (e) {
+        log('removePriceAlertReaction: ' + e.message, 'err');
+      }
+    }
+
+    async function loadParkingLots() {
+      try {
+        const res = await fetch(apiUrl('/active-users/parking-lots'));
+        const json = await res.json();
+        if (json.success && Array.isArray(json.data)) {
+          const sel = document.getElementById('parkingLot');
+          sel.innerHTML = json.data.map(l => `<option value="${escapeHtml(l.name)}">${escapeHtml(l.name)}</option>`).join('');
+        }
+      } catch (_) {}
+    }
+
+    // Init
+    document.getElementById('apiBase').value = detectApiBase();
+    document.getElementById('wsUrl').value = wsUrlFromApiBase(document.getElementById('apiBase').value);
+    if (token) {
+      document.getElementById('tokenInput').value = token;
+      decodeAndShowUser();
+    }
+    fetchWsConfig();
+    loadParkingLots();
+    updateAlertStats();
+    log('Test: Login → Connect → Subscribe All → create/update/like alerts. Open 2nd tab as another user.', 'sys');
+  </script>
+</body>
+</html>
